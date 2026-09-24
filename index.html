@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Домофон</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <script>
+        (function () {
+            var BUILD = '51';
+            window.__BUILD = BUILD;
+            // Обход бага WebView Velogram: первая (холодная) загрузка страницы
+            // отрисовывается чёрной. Лечится одной перезагрузкой: добавляем в URL
+            // метку _r и перезагружаемся.
+            fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+                .then(function (r) { return r.json(); })
+                .then(function (v) {
+                    var want = String((v && v.build) || BUILD);
+                    window.__VERJSON = want;
+                    try {
+                        var u = new URL(location.href);
+                        if (u.searchParams.get('_r') !== want) {
+                            u.searchParams.set('_r', want);
+                            location.replace(u.toString());
+                        }
+                    } catch (e) {}
+                })
+                .catch(function () {});
+        })();
+    </script>
+    <link rel="stylesheet" href="style.css?v=51">
+</head>
+<body>
+<div id="backdrop"></div>
+<div id="toast"></div>
+
+<div id="sheet">
+    <div id="handle"></div>
+
+    <div id="header">
+        <span id="title">Домофон</span>
+        <span id="status">Готов</span>
+    </div>
+
+    <div id="videoWrap">
+        <video id="video" autoplay playsinline muted></video>
+        <div id="badges">
+            <div id="recDot" class="vbadge hidden"><i></i>ЗАПИСЬ <span id="recTime">00:00</span></div>
+        </div>
+        <button id="btnQuality" class="quality" disabled>SD</button>
+        <div id="qualityInfo" class="hidden">—</div>
+    </div>
+
+    <div id="controls">
+        <button id="btnMic" class="round" disabled aria-label="Микрофон">
+            <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0"/><line x1="12" y1="18" x2="12" y2="22"/></svg>
+        </button>
+        <button id="btnSound" class="round muted" disabled aria-label="Звук">
+            <svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+        </button>
+        <button id="btnShot" class="round" disabled aria-label="Скриншот">
+            <svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg>
+        </button>
+        <button id="btnRec" class="round" disabled aria-label="Запись видео">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" style="fill:currentColor"/></svg>
+        </button>
+        <button id="btnDoor" class="round" disabled aria-label="Дверь">
+            <svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="1"/><circle cx="15" cy="12" r="1.5"/></svg>
+        </button>
+        <button id="btnToggle" class="round danger" disabled aria-label="Завершить">
+            <svg class="icon-end" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+            <svg class="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+    </div>
+
+    <div id="logHead"><span id="btnLogOpen">лог</span><button class="scrollToggle on" id="btnScroll">автопрокрутка: вкл</button></div>
+    <pre id="log"></pre>
+</div>
+
+<div id="logOverlay" class="hidden">
+    <div id="logOverlayHead">
+        <button id="btnLogPause" class="scrollToggle">⏸ остановить</button>
+        <button id="btnLogCopy" class="scrollToggle">📋 скопировать</button>
+        <button id="btnLogClose" class="scrollToggle">✕ закрыть</button>
+    </div>
+    <pre id="logArea"></pre>
+</div>
+
+<script src="app.js?v=51"></script>
+</body>
+</html>

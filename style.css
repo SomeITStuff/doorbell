@@ -1,0 +1,530 @@
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    height: 100%;
+    background: transparent;
+    color: #eee;
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+}
+
+#backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+#sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 66vh;
+    transition: height 0.2s ease;
+    background: #17171a;
+    border-radius: 22px 22px 0 0;
+    display: flex;
+    flex-direction: column;
+    padding: 6px 12px calc(10px + env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.6);
+}
+
+#handle {
+    height: 22px;
+    margin: 0 auto 2px;
+    cursor: grab;
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 30px;
+}
+
+#handle::before {
+    content: '';
+    width: 42px;
+    height: 4px;
+    border-radius: 2px;
+    background: #3a3a42;
+}
+
+#sheet.full {
+    height: 100vh;
+    border-radius: 0;
+}
+
+#sheet.full #handle::before {
+    background: #2f7cf6;
+}
+
+#logHead {
+    display: none;
+    justify-content: space-between;
+    align-items: center;
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: #888;
+}
+
+#logHead .scrollToggle {
+    background: #232329;
+    color: #ccc;
+    border-radius: 8px;
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+#logHead .scrollToggle.on {
+    background: #2f7cf6;
+    color: #fff;
+}
+
+#btnLogOpen {
+    cursor: pointer;
+    text-decoration: underline dotted;
+    padding: 2px 6px;
+}
+
+#logOverlay {
+    position: fixed;
+    inset: 0;
+    background: #0d0d10;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+}
+
+#logOverlay.hidden {
+    display: none;
+}
+
+#logOverlayHead {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start;
+    align-items: center;
+    padding-bottom: 8px;
+}
+
+#logOverlayHead .scrollToggle {
+    background: #232329;
+    color: #ccc;
+    border-radius: 8px;
+    padding: 9px 14px;
+    font-size: 13px;
+    transition: background 0.12s ease, transform 0.08s ease, color 0.12s ease;
+}
+
+#logOverlayHead .scrollToggle:active {
+    background: #2f7cf6;
+    color: #fff;
+    transform: scale(0.95);
+}
+
+#logOverlayHead .scrollToggle.on {
+    background: #2f7cf6;
+    color: #fff;
+}
+
+#logArea {
+    flex: 1;
+    margin: 0;
+    overflow: auto;
+    background: #000;
+    color: #9f9;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 11px;
+    line-height: 1.35;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 8px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.l-err { color: #ff6b6b; }
+.l-warn { color: #ffd166; }
+.l-ok { color: #7cfc9a; }
+
+#logHead.visible {
+    display: flex;
+}
+
+#sheet.full #log {
+    max-height: 45vh;
+}
+
+#header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0 4px 8px;
+    font-size: 14px;
+}
+
+#title {
+    font-weight: 600;
+}
+
+#status {
+    opacity: 0.7;
+    font-size: 12px;
+}
+
+#videoWrap {
+    flex: 1;
+    min-height: 0;
+    background: #000;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+    border-radius: 14px;
+    transform: translateZ(0);
+}
+
+#controls {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    padding-top: 12px;
+}
+
+button {
+    border: none;
+    border-radius: 14px;
+    padding: 14px 18px;
+    font-size: 16px;
+    background: #232329;
+    color: #fff;
+}
+
+button.round {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    padding: 0;
+    font-size: 14px;
+}
+
+button.danger {
+    background: #d33;
+}
+
+button:disabled {
+    opacity: 0.35;
+}
+
+button.on {
+    background: #2f7cf6;
+}
+
+#log {
+    display: none;
+    margin: 4px 0 0;
+    max-height: 22vh;
+    overflow: auto;
+    padding: 8px;
+    background: #000a;
+    color: #9f9;
+    font-size: 10px;
+    line-height: 1.3;
+    white-space: pre-wrap;
+    border-radius: 8px;
+}
+
+#log.visible {
+    display: block;
+}
+
+body.tg #sheet {
+    height: 66vh;
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.6);
+    padding-top: 6px;
+}
+
+body.tg #log {
+    max-height: 22vh;
+}
+
+#soundHint.overlay {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(47, 124, 246, 0.92);
+    padding: 14px 22px;
+    border-radius: 16px;
+    font-size: 16px;
+    z-index: 5;
+}
+
+#soundHint.overlay.hidden {
+    display: none;
+}
+
+#videoWrap {
+    position: relative;
+}
+
+button.round.off {
+    position: relative;
+    color: #888;
+}
+
+button.round.off::after {
+    content: '';
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    top: 50%;
+    height: 3px;
+    background: #e33;
+    border-radius: 2px;
+    transform: rotate(-45deg);
+}
+
+button.round svg {
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    display: block;
+    margin: 0 auto;
+}
+
+button.round {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: transform 0.08s ease, background 0.15s ease, box-shadow 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+button.round:active:not(:disabled) {
+    transform: scale(0.9);
+}
+
+button.round.on {
+    box-shadow: 0 0 0 2px rgba(47, 124, 246, 0.5);
+}
+
+#btnToggle .icon-play { display: none; }
+#btnToggle.play .icon-end { display: none; }
+#btnToggle.play .icon-play { display: block; }
+#btnToggle.play { background: #232329; }
+
+#btnDoor.busy { opacity: 0.55; }
+#btnDoor.ok { background: #2ecc71; }
+#btnDoor.err { background: #e74c3c; }
+
+button.round.busy { opacity: 0.55; }
+button.round.ok { background: #2ecc71; }
+button.round.err { background: #e74c3c; }
+
+#badges {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    z-index: 6;
+    max-width: calc(100% - 80px);
+}
+
+.vbadge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 6px 12px;
+    border-radius: 10px;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    white-space: nowrap;
+}
+
+.vbadge.temp.remove {
+    opacity: 0;
+    transform: translateY(-4px);
+}
+
+#recDot.hidden {
+    display: none;
+}
+
+#recDot i {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #e33;
+    animation: recpulse 1s ease-in-out infinite;
+}
+
+#recDot span {
+    font-variant-numeric: tabular-nums;
+    opacity: 0.9;
+    font-weight: 600;
+}
+
+#btnQuality.quality {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 6;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 10px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#btnQuality.quality:disabled {
+    opacity: 0.3;
+}
+
+#btnQuality.quality:not(:disabled):active {
+    background: #2f7cf6;
+}
+
+#qualityInfo {
+    position: absolute;
+    top: 47px;
+    right: 10px;
+    z-index: 6;
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    padding: 3px 9px;
+    border-radius: 8px;
+    opacity: 0.9;
+}
+
+#qualityInfo.hidden {
+    display: none;
+}
+
+button.round.attention {
+    animation: attpulse 1.1s ease-in-out infinite;
+}
+
+@keyframes attpulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.85); }
+    50% { box-shadow: 0 0 0 8px rgba(255, 209, 102, 0.1); }
+}
+
+@keyframes recpulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+}
+
+#toast {
+    position: fixed;
+    left: 50%;
+    top: 14%;
+    transform: translate(-50%, -12px);
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 50;
+    white-space: nowrap;
+    max-width: 90vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+#toast.err {
+    background: rgba(150, 40, 40, 0.72);
+}
+
+body.cinema #sheet {
+    height: 100vh;
+    border-radius: 0;
+}
+
+body.cinema #videoWrap {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    border-radius: 0;
+    background: #000;
+}
+
+body.cinema #video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100vh;
+    height: 100vw;
+    transform: translate(-50%, -50%) rotate(90deg);
+    object-fit: contain;
+    border-radius: 0;
+}
+
+body.cinema #header,
+body.cinema #logHead,
+body.cinema #log,
+body.cinema #handle {
+    display: none !important;
+}
+
+body.cinema #controls {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    z-index: 30;
+    opacity: 0.55;
+    transition: opacity 0.2s ease;
+}
+
+body.cinema #controls:active,
+body.cinema #controls:hover {
+    opacity: 1;
+}
+
+body.cinema #controls button.round {
+    background: rgba(35, 35, 41, 0.4);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
