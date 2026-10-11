@@ -105,6 +105,7 @@ let lastFrameTs = 0;
 let sawBright = false;
 let blackStrikes = 0;
 let recoveries = 0;
+let forceRelay = false;
 let stableTs = 0;
 
 let pc = null;
@@ -233,7 +234,7 @@ function loadTelegram() {
     // ВАЖНО: без s.remove() и без таймера-обрыва — WebView Velogram падает в чёрный
     // экран, если удалять <script> во время загрузки (проверено A/B 22.09.2026)
     const s = document.createElement('script');
-    s.src = 'telegram-web-app.js?v=54';
+    s.src = 'telegram-web-app.js?v=55';
     s.onerror = () => {
         log('TG: локальная копия не загрузилась — пробую telegram.org');
         const s2 = document.createElement('script');
@@ -269,14 +270,20 @@ function buildPeer() {
         log('WebRTC: недоступен (нет RTCPeerConnection/webkitRTCPeerConnection)');
         throw new Error('WebRTC недоступен в этом браузере');
     }
-    pc = new RTCImpl({
+    const pcConfig = {
         iceServers: [
-            { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
-            { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-            { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-            { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+            { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478', 'stun:stun.relay.metered.ca:80'] },
+            { urls: 'turn:standard.relay.metered.ca:80', username: '7590c4612e6730ce6b5e7fcf', credential: 'nEGkXjin1JVoW9td' },
+            { urls: 'turn:standard.relay.metered.ca:80?transport=tcp', username: '7590c4612e6730ce6b5e7fcf', credential: 'nEGkXjin1JVoW9td' },
+            { urls: 'turn:standard.relay.metered.ca:443', username: '7590c4612e6730ce6b5e7fcf', credential: 'nEGkXjin1JVoW9td' },
+            { urls: 'turns:standard.relay.metered.ca:443?transport=tcp', username: '7590c4612e6730ce6b5e7fcf', credential: 'nEGkXjin1JVoW9td' }
         ]
-    });
+    };
+    if (forceRelay) {
+        pcConfig.iceTransportPolicy = 'relay';
+        log('WebRTC: принудительно через TURN (relay)');
+    }
+    pc = new RTCImpl(pcConfig);
 
     const remote = [];
     remote.push(pc.addTransceiver('video', { direction: 'recvonly' }).receiver.track);
@@ -735,7 +742,8 @@ function repaintNudge() {
 function recoverVideo(reason) {
     if (recoveries < 2) {
         recoveries++;
-        log('видео-сторож: ' + reason + ' — перезапуск (' + recoveries + '/2)');
+        forceRelay = true;
+        log('видео-сторож: ' + reason + ' — перезапуск (' + recoveries + '/2) через TURN (relay)');
         try { hangup(); } catch (e) {}
         setTimeout(() => start().catch(e => log('видео-сторож старт ошибка:', String(e))), 900);
         return;
