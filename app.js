@@ -233,7 +233,7 @@ function loadTelegram() {
     // ВАЖНО: без s.remove() и без таймера-обрыва — WebView Velogram падает в чёрный
     // экран, если удалять <script> во время загрузки (проверено A/B 22.09.2026)
     const s = document.createElement('script');
-    s.src = 'telegram-web-app.js?v=53';
+    s.src = 'telegram-web-app.js?v=54';
     s.onerror = () => {
         log('TG: локальная копия не загрузилась — пробую telegram.org');
         const s2 = document.createElement('script');
@@ -264,7 +264,12 @@ async function getMic() {
 }
 
 function buildPeer() {
-    pc = new RTCPeerConnection({
+    const RTCImpl = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+    if (!RTCImpl) {
+        log('WebRTC: недоступен (нет RTCPeerConnection/webkitRTCPeerConnection)');
+        throw new Error('WebRTC недоступен в этом браузере');
+    }
+    pc = new RTCImpl({
         iceServers: [
             { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
             { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
