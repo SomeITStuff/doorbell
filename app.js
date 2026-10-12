@@ -234,7 +234,7 @@ function loadTelegram() {
     // ВАЖНО: без s.remove() и без таймера-обрыва — WebView Velogram падает в чёрный
     // экран, если удалять <script> во время загрузки (проверено A/B 22.09.2026)
     const s = document.createElement('script');
-    s.src = 'telegram-web-app.js?v=55';
+    s.src = 'telegram-web-app.js?v=56';
     s.onerror = () => {
         log('TG: локальная копия не загрузилась — пробую telegram.org');
         const s2 = document.createElement('script');
@@ -325,7 +325,9 @@ function buildPeer() {
                 const lt = local.candidateType;
                 const via = lt === 'relay' ? 'P2P через TURN (релей)'
                     : (lt === 'srflx' || lt === 'prflx' ? 'P2P через NAT' : 'напрямую (WiFi/LAN)');
-                const s = via + ' | ' + lt + '→' + (remote ? remote.candidateType : '?');
+                const la = (local.address || '?') + ':' + (local.port || '?') + '/' + (local.protocol || '?');
+                const ra = remote ? ((remote.address || '?') + ':' + (remote.port || '?') + '/' + (remote.protocol || '?')) : '?';
+                const s = via + ' | ' + lt + '→' + (remote ? remote.candidateType : '?') + ' | ' + la + ' ↔ ' + ra;
                 if (s !== lastPath) { lastPath = s; log('путь трафика:', s); }
             }
         } catch (e) {}

@@ -105,6 +105,7 @@ let lastFrameTs = 0;
 let sawBright = false;
 let blackStrikes = 0;
 let recoveries = 0;
+let forceRelay = false;
 let stableTs = 0;
 
 let pc = null;
@@ -112,6 +113,8 @@ let pendingCands = [];
 let ws = null;
 let micTrack = null;
 let streams = [];
+let gotAnswer = false;      // получен ли answer (для подсказки про устаревшую ссылку)
+let staleHintTimer = null;
 let roomBase = '';
 
 function lineClass(line) {
@@ -177,46 +180,70 @@ function setStatus(text) {
     log('status:', text);
 }
 
+function waitTelegram(ms) {
+    return new Promise(resolve => {
+        const t0 = Date.now();
+        (function poll() {
+            const tg = window.Telegram && window.Telegram.WebApp;
+            if (tg && tg.initData) return resolve(true);
+            if (Date.now() - t0 >= ms) return resolve(false);
+            setTimeout(poll, 120);
+        })();
+    });
+}
+
+function initTelegram() {
+    try {
+        if (window.Telegram && window.Telegram.WebApp) {
+            const tg = window.Telegram.WebApp;
+            if (window.__bootLog) window.__bootLog('tg: ок v' + tg.version);
+            document.body.classList.add('tg');
+            tg.ready();
+            log('TG: v' + tg.version, '| platform:', tg.platform, '| isFullscreen:', tg.isFullscreen, '| isExpanded:', tg.isExpanded, '| viewport:', tg.viewportStableHeight);
+            try {
+                if (tg.onEvent) {
+                    tg.onEvent('fullscreenChanged', () => log('event fullscreenChanged ->', tg.isFullscreen));
+                    tg.onEvent('fullscreenFailed', (e) => log('event fullscreenFailed:', JSON.stringify(e)));
+                    tg.onEvent('viewportChanged', (e) => { if (e && e.isStateStable) log('viewport ->', tg.viewportStableHeight); });
+                }
+            } catch (e) {}
+            try {
+                if (tg.isFullscreen && tg.exitFullscreen) {
+                    tg.exitFullscreen();
+                    log('вызван exitFullscreen');
+                } else {
+                    log('exitFullscreen недоступен');
+                }
+            } catch (e) {
+                log('exitFullscreen error:', String(e));
+            }
+            try {
+                if (tg.setHeaderColor) tg.setHeaderColor('secondary_bg_color');
+                if (tg.setBackgroundColor) tg.setBackgroundColor('#17171a');
+            } catch (e) {}
+        }
+    } catch (e) {
+        log('telegram init error:', String(e));
+    }
+}
+
 function loadTelegram() {
-    const s = document.createElement('script');
-    s.src = 'https://telegram.org/js/telegram-web-app.js';
+    // Локальная копия (тот же домен, что и страница): telegram.org может быть
+    // недоступен/медленный с сети клиента — тогда initData не появится и
+    // авторизоваться через Telegram не выйдет. Фолбэк — официальный CDN.
     // ВАЖНО: без s.remove() и без таймера-обрыва — WebView Velogram падает в чёрный
     // экран, если удалять <script> во время загрузки (проверено A/B 22.09.2026)
-    s.onerror = () => { log('TG: скрипт не загрузился (ошибка)'); if (window.__bootLog) window.__bootLog('tg: нет (сеть)'); };
-    s.onload = () => {
-        try {
-            if (window.Telegram && window.Telegram.WebApp) {
-                const tg = window.Telegram.WebApp;
-                if (window.__bootLog) window.__bootLog('tg: ок v' + tg.version);
-                document.body.classList.add('tg');
-                tg.ready();
-                log('TG: v' + tg.version, '| platform:', tg.platform, '| isFullscreen:', tg.isFullscreen, '| isExpanded:', tg.isExpanded, '| viewport:', tg.viewportStableHeight);
-                try {
-                    if (tg.onEvent) {
-                        tg.onEvent('fullscreenChanged', () => log('event fullscreenChanged ->', tg.isFullscreen));
-                        tg.onEvent('fullscreenFailed', (e) => log('event fullscreenFailed:', JSON.stringify(e)));
-                        tg.onEvent('viewportChanged', (e) => { if (e && e.isStateStable) log('viewport ->', tg.viewportStableHeight); });
-                    }
-                } catch (e) {}
-                try {
-                    if (tg.isFullscreen && tg.exitFullscreen) {
-                        tg.exitFullscreen();
-                        log('вызван exitFullscreen');
-                    } else {
-                        log('exitFullscreen недоступен');
-                    }
-                } catch (e) {
-                    log('exitFullscreen error:', String(e));
-                }
-                try {
-                    if (tg.setHeaderColor) tg.setHeaderColor('secondary_bg_color');
-                    if (tg.setBackgroundColor) tg.setBackgroundColor('#17171a');
-                } catch (e) {}
-            }
-        } catch (e) {
-            log('telegram init error:', String(e));
-        }
+    const s = document.createElement('script');
+    s.src = 'telegram-web-app.js?v=56';
+    s.onerror = () => {
+        log('TG: локальная копия не загрузилась — пробую telegram.org');
+        const s2 = document.createElement('script');
+        s2.src = 'https://telegram.org/js/telegram-web-app.js';
+        s2.onerror = () => { log('TG: скрипт не загрузился (сеть)'); if (window.__bootLog) window.__bootLog('tg: нет (сеть)'); };
+        s2.onload = () => initTelegram();
+        document.head.appendChild(s2);
     };
+    s.onload = () => initTelegram();
     document.head.appendChild(s);
 }
 
@@ -238,14 +265,25 @@ async function getMic() {
 }
 
 function buildPeer() {
-    pc = new RTCPeerConnection({
+    const RTCImpl = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+    if (!RTCImpl) {
+        log('WebRTC: недоступен (нет RTCPeerConnection/webkitRTCPeerConnection)');
+        throw new Error('WebRTC недоступен в этом браузере');
+    }
+    const pcConfig = {
         iceServers: [
-            { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
-            { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-            { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-            { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+            { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478', 'stun:stun.relay.metered.ca:80'] },
+            { urls: 'turn:standard.relay.metered.ca:80', username: '7590c4612e6730ce6b5e7fcf', credential: 'nEGkXjin1JVoW9td' },
+            { urls: 'turn:standard.relay.metered.ca:80?transport=tcp', username: '7590c4612e6730ce6b5e7fcf', credential: 'nEGkXjin1JVoW9td' },
+            { urls: 'turn:standard.relay.metered.ca:443', username: '7590c4612e6730ce6b5e7fcf', credential: 'nEGkXjin1JVoW9td' },
+            { urls: 'turns:standard.relay.metered.ca:443?transport=tcp', username: '7590c4612e6730ce6b5e7fcf', credential: 'nEGkXjin1JVoW9td' }
         ]
-    });
+    };
+    if (forceRelay) {
+        pcConfig.iceTransportPolicy = 'relay';
+        log('WebRTC: принудительно через TURN (relay)');
+    }
+    pc = new RTCImpl(pcConfig);
 
     const remote = [];
     remote.push(pc.addTransceiver('video', { direction: 'recvonly' }).receiver.track);
@@ -287,7 +325,9 @@ function buildPeer() {
                 const lt = local.candidateType;
                 const via = lt === 'relay' ? 'P2P через TURN (релей)'
                     : (lt === 'srflx' || lt === 'prflx' ? 'P2P через NAT' : 'напрямую (WiFi/LAN)');
-                const s = via + ' | ' + lt + '→' + (remote ? remote.candidateType : '?');
+                const la = (local.address || '?') + ':' + (local.port || '?') + '/' + (local.protocol || '?');
+                const ra = remote ? ((remote.address || '?') + ':' + (remote.port || '?') + '/' + (remote.protocol || '?')) : '?';
+                const s = via + ' | ' + lt + '→' + (remote ? remote.candidateType : '?') + ' | ' + la + ' ↔ ' + ra;
                 if (s !== lastPath) { lastPath = s; log('путь трафика:', s); }
             }
         } catch (e) {}
@@ -438,11 +478,43 @@ async function authViaTelegram() {
 }
 
 async function signalRtdb() {
+    // В Telegram ВСЕГДА берём свежий токен через initData — старые ссылки
+    // с истёкшим k= работают без непоняток у клиента. Токен из ссылки —
+    // фолбэк для случаев без Telegram (обычный браузер).
+    gotAnswer = false;
+    // Ждём, пока динамически загружаемый telegram-web-app.js создаст initData
+    // (локальная копия + запас на медленную сеть).
+    if (!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData)) {
+        const ok = await waitTelegram(4000);
+        const tgNow = window.Telegram && window.Telegram.WebApp;
+        if (ok) {
+            log('TG initData получен (после ожидания скрипта)');
+        } else {
+            log('диагностика TG: WebApp=' + (tgNow ? 'есть' : 'нет') +
+                ', initData=' + (tgNow && tgNow.initData ? 'есть' : 'пусто') +
+                ', hash=' + (location.hash ? 'есть' : 'нет'));
+        }
+    }
+    const tg = window.Telegram && window.Telegram.WebApp;
+    const urlKey = KEY;
+    if (tg && tg.initData) {
+        const tgToken = await authViaTelegram();
+        if (tgToken) {
+            if (urlKey && urlKey !== tgToken) log('токен из ссылки устарел — обновлён через Telegram');
+            KEY = tgToken;
+        } else if (!urlKey) {
+            setStatus('Нет доступа');
+            log('откройте кнопкой «Открыть приложение» у @veshki_doorbell_bot (или /link)');
+            return;
+        } else {
+            log('Telegram-авторизация не удалась — пробую токен из ссылки');
+        }
+    }
     if (!KEY) {
         KEY = await authViaTelegram();
         if (!KEY) {
             setStatus('Нет доступа');
-            log('откройте приложение через сообщение о звонке или команду /link');
+            log('откройте кнопкой «Открыть приложение» у @veshki_doorbell_bot (или /link)');
             return;
         }
     }
@@ -464,6 +536,8 @@ async function signalRtdb() {
             const obj = JSON.parse(ev.data);
             const sdp = typeof obj.data === 'string' ? obj.data : (obj.data && obj.data.sdp);
             if (!sdp) return;
+            gotAnswer = true;
+            if (staleHintTimer) { clearTimeout(staleHintTimer); staleHintTimer = null; }
             log('answer получен (rtdb)');
             await pc.setRemoteDescription({ type: 'answer', sdp });
             setStatus('В эфире');
@@ -488,6 +562,15 @@ async function signalRtdb() {
     await pc.setLocalDescription(await pc.createOffer());
     const res = await fetch(`${roomBase}/offer.json`, { method: 'PUT', body: JSON.stringify(pc.localDescription.sdp) });
     log('offer -> rtdb:', res.status);
+
+    // если ответа нет — понятная подсказка (обычно устаревшая ссылка/токен)
+    if (staleHintTimer) clearTimeout(staleHintTimer);
+    staleHintTimer = setTimeout(() => {
+        if (!gotAnswer) {
+            log('нет ответа 12с: откройте приложение через кнопку бота (ссылка могла устареть)');
+            setStatus('Нет ответа — откройте через бота');
+        }
+    }, 12000);
 }
 
 async function maybeMicAtStart() {
@@ -522,6 +605,7 @@ async function start() {
 }
 
 function hangup() {
+    if (staleHintTimer) { clearTimeout(staleHintTimer); staleHintTimer = null; }
     log('завершение звонка');
     if (recording) {
         log('запись продолжается на сервере (авто-стоп до 120с), видео придёт в Telegram');
@@ -660,7 +744,8 @@ function repaintNudge() {
 function recoverVideo(reason) {
     if (recoveries < 2) {
         recoveries++;
-        log('видео-сторож: ' + reason + ' — перезапуск (' + recoveries + '/2)');
+        forceRelay = true;
+        log('видео-сторож: ' + reason + ' — перезапуск (' + recoveries + '/2) через TURN (relay)');
         try { hangup(); } catch (e) {}
         setTimeout(() => start().catch(e => log('видео-сторож старт ошибка:', String(e))), 900);
         return;
