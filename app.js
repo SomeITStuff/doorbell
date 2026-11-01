@@ -112,6 +112,7 @@ let pc = null;
 let pendingCands = [];
 let ws = null;
 let micTrack = null;
+let micStream = null;
 let streams = [];
 let gotAnswer = false;      // получен ли answer (для подсказки про устаревшую ссылку)
 let staleHintTimer = null;
@@ -234,7 +235,7 @@ function loadTelegram() {
     // ВАЖНО: без s.remove() и без таймера-обрыва — WebView Velogram падает в чёрный
     // экран, если удалять <script> во время загрузки (проверено A/B 22.09.2026)
     const s = document.createElement('script');
-    s.src = 'telegram-web-app.js?v=58';
+    s.src = 'telegram-web-app.js?v=59';
     s.onerror = () => {
         log('TG: локальная копия не загрузилась — пробую telegram.org');
         const s2 = document.createElement('script');
@@ -253,11 +254,15 @@ async function getMic() {
         return null;
     }
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        micStream = await navigator.mediaDevices.getUserMedia({
             audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
-        log('mic: трек получен');
-        return stream.getAudioTracks()[0] || null;
+        const tr = micStream.getAudioTracks()[0] || null;
+        if (tr) {
+            tr.onended = () => log('mic: трек завершился (onended)');
+            log('mic: трек получен (state=' + tr.readyState + ')');
+        }
+        return tr;
     } catch (e) {
         log('mic error:', String(e));
         return null;
@@ -672,6 +677,23 @@ async function addMicTrack() {
     if (micTrack) return;
     micTrack = await getMic();
     if (!micTrack) return;
+    if (micTrack.readyState !== 'live') {
+        log('mic: трек не живой (' + micTrack.readyState + '), пробую ещё раз без constraints...');
+        try {
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            micTrack = micStream.getAudioTracks()[0] || null;
+            if (micTrack) {
+                micTrack.onended = () => log('mic: трек завершился (onended)');
+                log('mic: трек получен со второй попытки (state=' + micTrack.readyState + ')');
+            }
+        } catch (e) {
+            log('mic retry error:', String(e));
+        }
+        if (!micTrack || micTrack.readyState !== 'live') {
+            log('mic: трек так и не стал живым — talk в этом окружении недоступен');
+            return;
+        }
+    }
     const tr = pc.getTransceivers().find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio');
     if (tr) {
         tr.direction = 'sendrecv';
