@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тест микрофона</title>
+<style>body{font:18px -apple-system,Roboto,sans-serif;padding:20px}#log{white-space:pre-wrap;font-size:13px}button{font-size:20px;padding:12px 20px}</style>
+</head>
+<body>
+<h2>Тест микрофона</h2>
+<button id="btn">Включить микрофон</button>
+<div id="state" style="font-size:22px;margin:12px 0">—</div>
+<pre id="log"></pre>
+<script>
+var logEl = document.getElementById('log');
+function log(){
+    var s = Array.prototype.slice.call(arguments).join(' ');
+    var t = new Date().toLocaleTimeString();
+    logEl.textContent += t + ' ' + s + '\n';
+}
+document.getElementById('btn').onclick = async function(){
+    try {
+        var stream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        });
+        var tr = stream.getAudioTracks()[0];
+        log('getUserMedia OK: state=' + tr.readyState + ' label=' + tr.label);
+        tr.onended = function(){ log('!! onended'); };
+        var ac = new (window.AudioContext || window.webkitAudioContext)();
+        var src = ac.createMediaStreamSource(stream);
+        var an = ac.createAnalyser();
+        an.fftSize = 512;
+        src.connect(an);
+        var data = new Uint8Array(an.fftSize);
+        document.getElementById('state').textContent = 'слушаю микрофон...';
+        setInterval(function(){
+            var st = tr.readyState;
+            var vol = -1;
+            try {
+                if (an) {
+                    an.getByteTimeDomainData(data);
+                    var max = 0;
+                    for (var i = 0; i < data.length; i++) {
+                        var d = Math.abs(data[i] - 128);
+                        if (d > max) max = d;
+                    }
+                    vol = max;
+                }
+            } catch (e) {}
+            document.getElementById('state').textContent =
+                'track=' + st + ' muted=' + tr.muted + ' level=' + vol;
+            log('state=' + st + ' muted=' + tr.muted + ' level=' + vol);
+        }, 1000);
+    } catch (e) {
+        log('ERROR ' + e);
+        document.getElementById('state').textContent = 'Ошибка: ' + e;
+    }
+};
+</script>
+</body>
+</html>
