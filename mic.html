@@ -27,6 +27,8 @@ document.getElementById('btn').onclick = async function(){
         log('getUserMedia OK: state=' + tr.readyState + ' label=' + tr.label);
         tr.onended = function(){ log('!! onended'); };
         var ac = new (window.AudioContext || window.webkitAudioContext)();
+        try { await ac.resume(); } catch (e) {}
+        log('AudioContext state=' + ac.state);
         var src = ac.createMediaStreamSource(stream);
         var an = ac.createAnalyser();
         an.fftSize = 512;
@@ -48,8 +50,8 @@ document.getElementById('btn').onclick = async function(){
                 }
             } catch (e) {}
             document.getElementById('state').textContent =
-                'track=' + st + ' muted=' + tr.muted + ' level=' + vol;
-            log('state=' + st + ' muted=' + tr.muted + ' level=' + vol);
+                'track=' + st + ' muted=' + tr.muted + ' ctx=' + ac.state + ' level=' + vol;
+            log('state=' + st + ' muted=' + tr.muted + ' ctx=' + ac.state + ' level=' + vol);
         }, 1000);
     } catch (e) {
         log('ERROR ' + e);
