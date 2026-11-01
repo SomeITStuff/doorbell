@@ -105,6 +105,7 @@ let lastFrameTs = 0;
 let sawBright = false;
 let blackStrikes = 0;
 let recoveries = 0;
+let forceRelay = false;
 let stableTs = 0;
 
 let pc = null;
@@ -233,7 +234,7 @@ function loadTelegram() {
     // ВАЖНО: без s.remove() и без таймера-обрыва — WebView Velogram падает в чёрный
     // экран, если удалять <script> во время загрузки (проверено A/B 22.09.2026)
     const s = document.createElement('script');
-    s.src = 'telegram-web-app.js?v=53';
+    s.src = 'telegram-web-app.js?v=58';
     s.onerror = () => {
         log('TG: локальная копия не загрузилась — пробую telegram.org');
         const s2 = document.createElement('script');
@@ -264,14 +265,25 @@ async function getMic() {
 }
 
 function buildPeer() {
-    pc = new RTCPeerConnection({
+    const RTCImpl = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+    if (!RTCImpl) {
+        log('WebRTC: недоступен (нет RTCPeerConnection/webkitRTCPeerConnection)');
+        throw new Error('WebRTC недоступен в этом браузере');
+    }
+    const pcConfig = {
         iceServers: [
-            { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
-            { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-            { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-            { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+            { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478', 'stun:stun.relay.metered.ca:80'] },
+            { urls: 'turn:standard.relay.metered.ca:80', username: '7590c4612e6730ce6b5e7fcf', credential: 'nEGkXjin1JVoW9td' },
+            { urls: 'turn:standard.relay.metered.ca:80?transport=tcp', username: '7590c4612e6730ce6b5e7fcf', credential: 'nEGkXjin1JVoW9td' },
+            { urls: 'turn:standard.relay.metered.ca:443', username: '7590c4612e6730ce6b5e7fcf', credential: 'nEGkXjin1JVoW9td' },
+            { urls: 'turns:standard.relay.metered.ca:443?transport=tcp', username: '7590c4612e6730ce6b5e7fcf', credential: 'nEGkXjin1JVoW9td' }
         ]
-    });
+    };
+    if (forceRelay) {
+        pcConfig.iceTransportPolicy = 'relay';
+        log('WebRTC: принудительно через TURN (relay)');
+    }
+    pc = new RTCImpl(pcConfig);
 
     const remote = [];
     remote.push(pc.addTransceiver('video', { direction: 'recvonly' }).receiver.track);
@@ -297,7 +309,15 @@ function buildPeer() {
                 if (r.type === 'inbound-rtp' && r.kind === 'video') {
                     log('video stats: framesDecoded=' + r.framesDecoded + ' bytes=' + r.bytesReceived + ' w=' + r.frameWidth + 'x' + r.frameHeight);
                 }
+                if (r.type === 'outbound-rtp' && r.kind === 'audio') {
+                    log('audio out: bytes=' + r.bytesSent + ' pkts=' + r.packetsSent);
+                }
             });
+            const atr2 = pc.getTransceivers().find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio');
+            if (atr2) {
+                log('audio tr: dir=' + atr2.direction + '/' + atr2.currentDirection
+                    + ' sender=' + (atr2.sender && atr2.sender.track ? (atr2.sender.track.readyState + '/muted=' + atr2.sender.track.muted) : 'none'));
+            }
             let pairId = null;
             stats.forEach(r => { if (r.type === 'transport' && r.selectedCandidatePairId) pairId = r.selectedCandidatePairId; });
             let local = null, remote = null;
@@ -313,7 +333,9 @@ function buildPeer() {
                 const lt = local.candidateType;
                 const via = lt === 'relay' ? 'P2P через TURN (релей)'
                     : (lt === 'srflx' || lt === 'prflx' ? 'P2P через NAT' : 'напрямую (WiFi/LAN)');
-                const s = via + ' | ' + lt + '→' + (remote ? remote.candidateType : '?');
+                const la = (local.address || '?') + ':' + (local.port || '?') + '/' + (local.protocol || '?');
+                const ra = remote ? ((remote.address || '?') + ':' + (remote.port || '?') + '/' + (remote.protocol || '?')) : '?';
+                const s = via + ' | ' + lt + '→' + (remote ? remote.candidateType : '?') + ' | ' + la + ' ↔ ' + ra;
                 if (s !== lastPath) { lastPath = s; log('путь трафика:', s); }
             }
         } catch (e) {}
@@ -525,8 +547,21 @@ async function signalRtdb() {
             gotAnswer = true;
             if (staleHintTimer) { clearTimeout(staleHintTimer); staleHintTimer = null; }
             log('answer получен (rtdb)');
+            const ma = sdp.match(/m=audio[^\r\n]*/);
+            if (ma) {
+                const sec = sdp.slice(sdp.indexOf(ma[0]));
+                const dm = sec.match(/a=(sendrecv|sendonly|recvonly|inactive)/);
+                log('answer m=audio:', ma[0], '| dir:', dm ? dm[1] : '?');
+            }
             await pc.setRemoteDescription({ type: 'answer', sdp });
             setStatus('В эфире');
+            try {
+                const atr = pc.getTransceivers().find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio');
+                if (atr) {
+                    log('audio tr после answer: dir=' + atr.direction + '/' + atr.currentDirection
+                        + ' sender=' + (atr.sender && atr.sender.track ? (atr.sender.track.readyState + '/muted=' + atr.sender.track.muted) : 'none'));
+                }
+            } catch (e) {}
             await flushCands();
         } catch (e) {
             log('answer parse error:', String(e));
@@ -730,7 +765,8 @@ function repaintNudge() {
 function recoverVideo(reason) {
     if (recoveries < 2) {
         recoveries++;
-        log('видео-сторож: ' + reason + ' — перезапуск (' + recoveries + '/2)');
+        forceRelay = true;
+        log('видео-сторож: ' + reason + ' — перезапуск (' + recoveries + '/2) через TURN (relay)');
         try { hangup(); } catch (e) {}
         setTimeout(() => start().catch(e => log('видео-сторож старт ошибка:', String(e))), 900);
         return;

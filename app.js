@@ -234,7 +234,7 @@ function loadTelegram() {
     // ВАЖНО: без s.remove() и без таймера-обрыва — WebView Velogram падает в чёрный
     // экран, если удалять <script> во время загрузки (проверено A/B 22.09.2026)
     const s = document.createElement('script');
-    s.src = 'telegram-web-app.js?v=57';
+    s.src = 'telegram-web-app.js?v=58';
     s.onerror = () => {
         log('TG: локальная копия не загрузилась — пробую telegram.org');
         const s2 = document.createElement('script');
@@ -313,6 +313,11 @@ function buildPeer() {
                     log('audio out: bytes=' + r.bytesSent + ' pkts=' + r.packetsSent);
                 }
             });
+            const atr2 = pc.getTransceivers().find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio');
+            if (atr2) {
+                log('audio tr: dir=' + atr2.direction + '/' + atr2.currentDirection
+                    + ' sender=' + (atr2.sender && atr2.sender.track ? (atr2.sender.track.readyState + '/muted=' + atr2.sender.track.muted) : 'none'));
+            }
             let pairId = null;
             stats.forEach(r => { if (r.type === 'transport' && r.selectedCandidatePairId) pairId = r.selectedCandidatePairId; });
             let local = null, remote = null;
@@ -542,8 +547,21 @@ async function signalRtdb() {
             gotAnswer = true;
             if (staleHintTimer) { clearTimeout(staleHintTimer); staleHintTimer = null; }
             log('answer получен (rtdb)');
+            const ma = sdp.match(/m=audio[^\r\n]*/);
+            if (ma) {
+                const sec = sdp.slice(sdp.indexOf(ma[0]));
+                const dm = sec.match(/a=(sendrecv|sendonly|recvonly|inactive)/);
+                log('answer m=audio:', ma[0], '| dir:', dm ? dm[1] : '?');
+            }
             await pc.setRemoteDescription({ type: 'answer', sdp });
             setStatus('В эфире');
+            try {
+                const atr = pc.getTransceivers().find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio');
+                if (atr) {
+                    log('audio tr после answer: dir=' + atr.direction + '/' + atr.currentDirection
+                        + ' sender=' + (atr.sender && atr.sender.track ? (atr.sender.track.readyState + '/muted=' + atr.sender.track.muted) : 'none'));
+                }
+            } catch (e) {}
             await flushCands();
         } catch (e) {
             log('answer parse error:', String(e));

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка WebRTC</title>
+<style>body{font:20px/1.5 -apple-system,Roboto,sans-serif;padding:24px} b{font-size:26px} .no{color:#c00} .yes{color:#080}</style>
+</head>
+<body>
+<h2>Проверка WebRTC</h2>
+<p>RTCPeerConnection: <b id="a">…</b></p>
+<p>webkitRTCPeerConnection: <b id="b">…</b></p>
+<p>mediaDevices: <b id="c">…</b></p>
+<hr>
+<p style="font-size:14px;word-break:break-all">UA: <span id="ua"></span></p>
+<p style="font-size:14px">Telegram WebApp: <span id="tg"></span></p>
+<script>
+function show(id, v, ok){var el=document.getElementById(id);el.textContent=v;el.className=ok?'yes':'no';}
+var a = typeof window.RTCPeerConnection;
+show('a', a, a==='function');
+var b = typeof window.webkitRTCPeerConnection;
+show('b', b, b==='function');
+var c = (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) ? 'есть' : 'нет';
+show('c', c, c==='есть');
+document.getElementById('ua').textContent = navigator.userAgent;
+document.getElementById('tg').textContent = (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.platform && window.Telegram.WebApp.platform !== 'unknown') ? 'да' : 'нет/unknown';
+</script>
+</body>
+</html>
