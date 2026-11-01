@@ -234,7 +234,7 @@ function loadTelegram() {
     // ВАЖНО: без s.remove() и без таймера-обрыва — WebView Velogram падает в чёрный
     // экран, если удалять <script> во время загрузки (проверено A/B 22.09.2026)
     const s = document.createElement('script');
-    s.src = 'telegram-web-app.js?v=56';
+    s.src = 'telegram-web-app.js?v=57';
     s.onerror = () => {
         log('TG: локальная копия не загрузилась — пробую telegram.org');
         const s2 = document.createElement('script');
@@ -308,6 +308,9 @@ function buildPeer() {
             stats.forEach(r => {
                 if (r.type === 'inbound-rtp' && r.kind === 'video') {
                     log('video stats: framesDecoded=' + r.framesDecoded + ' bytes=' + r.bytesReceived + ' w=' + r.frameWidth + 'x' + r.frameHeight);
+                }
+                if (r.type === 'outbound-rtp' && r.kind === 'audio') {
+                    log('audio out: bytes=' + r.bytesSent + ' pkts=' + r.packetsSent);
                 }
             });
             let pairId = null;
